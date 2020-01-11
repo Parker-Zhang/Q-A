@@ -1,0 +1,30 @@
+ubuntu 装机必备软件
+教程链接：
+https://blog.csdn.net/chenhaojing/article/details/79462809
+
+ROS roboware studio安装教程
+https://blog.csdn.net/zhuiqiuzhuoyue583/article/details/84536406
+
+ROS安装和使用的教程
+https://blog.csdn.net/shuaiwangcsdn/article/details/75734887
+
+查看系统的内存情况
+gnome-system-monitor
+
+解决无法获得锁： 
+提示：E: 无法获得锁 ；E: 无法获取 dpkg 前端锁
+解决方法：
+rm /var/lib/dpkg/lock
+
+rm /var/lib/dpkg/lock-frontend 
+
+rm /var/cache/apt/archives/lock 
+
+Zsh 补全插件
+ubuntu18.04下安装oh-my-zsh :https://www.cnblogs.com/guanine/p/9392363.html
+主题的选择：https://github.com/ohmyzsh/ohmyzsh/wiki/themes
+
+cairo-dock 插件
+
+
+
