@@ -26,5 +26,5 @@ ubuntu18.04下安装oh-my-zsh :https://www.cnblogs.com/guanine/p/9392363.html
 
 cairo-dock 插件
 
-
+http://emanual.robotis.com/docs/en/software/dynamixel/dynamixel_workbench/
 
