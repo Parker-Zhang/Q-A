@@ -1,12 +1,14 @@
+github:
+https://github.com/Parker-Zhang/Q-A
+
 ubuntu 装机必备软件
 教程链接：
 https://blog.csdn.net/chenhaojing/article/details/79462809
 
 ROS roboware studio安装教程
 https://blog.csdn.net/zhuiqiuzhuoyue583/article/details/84536406
-
-ROS安装和使用的教程
-https://blog.csdn.net/shuaiwangcsdn/article/details/75734887
+github资源：https://github.com/TonyRobotics/RoboWare
+git clone https://github.com/TonyRobotics/RoboWare.git
 
 查看系统的内存情况
 gnome-system-monitor
@@ -24,7 +26,57 @@ Zsh 补全插件
 ubuntu18.04下安装oh-my-zsh :https://www.cnblogs.com/guanine/p/9392363.html
 主题的选择：https://github.com/ohmyzsh/ohmyzsh/wiki/themes
 
-cairo-dock 插件
+ubuntu为软件添加启动图标
+https://blog.csdn.net/zhuawalibai/article/details/97764381
 
+ubuntu打开应用列表
+sudo  nautilus  /usr/share/applications
+
+永久修改USB的权限：
+https://www.jb51.net/os/Ubuntu/392419.html
+
+/*******************************************************************************************/
+below is something about ROS
+/*******************************************************************************************/
+ROS安装和使用的教程
+https://blog.csdn.net/shuaiwangcsdn/article/details/75734887
+
+ROS reference：
+https://blog.csdn.net/ZhangRelay/column/info/28058
+
+ROS Wiki：
+books:
+http://wiki.ros.org/Books
+
+
+To add the workspace to your ROS environment you need to source the generated setup file: 
+. ~/catkin_ws/devel/setup.bash
+
+# In a CMake project
+$ mkdir build
+$ cd build
+$ cmake ..
+$ make
+$ make install  # (optionally)
+
+
+# In a catkin workspace
+$ catkin_make
+$ catkin_make install  # (optionally)
+
+# In a catkin workspace
+$ catkin_make --source my_src
+$ catkin_make install --source my_src  # (optionally)
+
+ROS Melodic
+在ROS-Melodic版本上编译书籍机器人开发实践源码及报错问题解决方法
+https://blog.csdn.net/ckkboy/article/details/99588215
+
+ROS Melodic 迷失与救赎
+https://blog.csdn.net/ZhangRelay/column/info/28058
+
+/****************************************************************/
+/*            Dynamixel                                         */ 
+/****************************************************************/
 http://emanual.robotis.com/docs/en/software/dynamixel/dynamixel_workbench/
 
