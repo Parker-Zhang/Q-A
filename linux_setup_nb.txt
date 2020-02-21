@@ -75,8 +75,36 @@ https://blog.csdn.net/ckkboy/article/details/99588215
 ROS Melodic 迷失与救赎
 https://blog.csdn.net/ZhangRelay/column/info/28058
 
+ROS moveit！教程
+http://docs.ros.org/melodic/api/moveit_tutorials/html/index.html
+
+阿里源
+deb http://mirrors.aliyun.com/ubuntu/ xenial main
+deb-src http://mirrors.aliyun.com/ubuntu/ xenial main
+deb http://mirrors.aliyun.com/ubuntu/ xenial-updates main
+deb-src http://mirrors.aliyun.com/ubuntu/ xenial-updates main
+deb http://mirrors.aliyun.com/ubuntu/ xenial universe
+deb-src http://mirrors.aliyun.com/ubuntu/ xenial universe
+deb http://mirrors.aliyun.com/ubuntu/ xenial-updates universe
+deb-src http://mirrors.aliyun.com/ubuntu/ xenial-updates universe
+deb http://mirrors.aliyun.com/ubuntu/ xenial-security main
+deb-src http://mirrors.aliyun.com/ubuntu/ xenial-security main
+deb http://mirrors.aliyun.com/ubuntu/ xenial-security universe
+deb-src http://mirrors.aliyun.com/ubuntu/ xenial-security universe
+
 /****************************************************************/
 /*            Dynamixel                                         */ 
 /****************************************************************/
 http://emanual.robotis.com/docs/en/software/dynamixel/dynamixel_workbench/
 
+/****************************************************************/
+/*            Guide policy search                               */ 
+/****************************************************************/
+http://rll.berkeley.edu/gps/  伯克利gps算法文档
+https://github.com/cbfinn/gps  github源代码
+依赖安装指令：
+sudo apt-get install python-numpy python-scipy python-matplotlib ipython ipython-notebook python-pandas python-sympy python-nose
+sudo apt-get install libprotobuf-dev protobuf-compiler libboost-all-dev
+sudo pip install protobuf
+PR2机器人测试
+https://blog.csdn.net/weixin_39059031/article/details/84568006
