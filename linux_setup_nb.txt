@@ -101,10 +101,24 @@ http://emanual.robotis.com/docs/en/software/dynamixel/dynamixel_workbench/
 /*            Guide policy search                               */ 
 /****************************************************************/
 http://rll.berkeley.edu/gps/  伯克利gps算法文档
+另一个gps的官方网站：
+https://gps-codebase.readthedocs.io/en/latest/
 https://github.com/cbfinn/gps  github源代码
+知乎上关于MPC GPS算法的介绍：
+https://zhuanlan.zhihu.com/p/91865627
+https://zhuanlan.zhihu.com/p/95403801
+
+安装教程：
 依赖安装指令：
 sudo apt-get install python-numpy python-scipy python-matplotlib ipython ipython-notebook python-pandas python-sympy python-nose
 sudo apt-get install libprotobuf-dev protobuf-compiler libboost-all-dev
 sudo pip install protobuf
 PR2机器人测试
 https://blog.csdn.net/weixin_39059031/article/details/84568006
+
+ROS setup编译心得
+首先可能这不是用catkin_create_pkg所以编译的时候要按照教程先cmake . 再make -j
+编译的时候会产生的问题在下面三个链接中有记录：
+https://blog.csdn.net/qifengle315/article/details/98648293
+https://blog.csdn.net/qq_41009742/article/details/103061090
+https://blog.csdn.net/qq_41009742/article/details/103131546
