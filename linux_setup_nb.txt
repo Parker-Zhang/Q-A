@@ -96,7 +96,17 @@ deb-src http://mirrors.aliyun.com/ubuntu/ xenial-security universe
 /*            Dynamixel                                         */ 
 /****************************************************************/
 http://emanual.robotis.com/docs/en/software/dynamixel/dynamixel_workbench/
+http://emanual.robotis.com/docs/en/dxl/x/xh430-w350/#control-table-of-eeprom-area
+http://emanual.robotis.com/docs/en/dxl/protocol2/#status-packet
+2020.2.28 可以复现一个workbench的功能
+String::c_str():返回一个指向正规C字符串的指针, 内容与本string串相同,目的是与c兼容
+ROS学习：launch文件解析：https://www.cnblogs.com/yrm1160029237/p/10108161.html
+arg参数，声明一个变量，argument
+2020.2.29
+c++map的使用：map是建立一个类型与另一种类型的映射
+参考链接：https://blog.csdn.net/datase/article/details/82588622
 
+动态参数教程：https://www.corvin.cn/651.html
 /****************************************************************/
 /*            Guide policy search                               */ 
 /****************************************************************/
