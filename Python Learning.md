@@ -55,15 +55,14 @@ sudo apt-get install python-numpy python-scipy python-matplotlib ipython ipython
 
 ### 3. learning
 
-#### 3.1 生词
+> https://scipy-lectures.org/index.html
 
-> generic 通用的	Modules 模组	interpolation 插补	syntax 句法	tuples 元组
+#### 生词
 
+> generic 通用的	Modules 模组	interpolation 插补	syntax 句法	tuples 元组	compulsory 必修	indentation 缩进
 
-
-#### 3.2 Numerical types,Containers,Assignment operator
-
-数据结构以及基本操作：
+#### 1.Basic 
+##### 1.1. Numerical types,Containers,Assignment operator
 
 > https://scipy-lectures.org/intro/language/basic_types.html#numerical-types
 
@@ -73,11 +72,43 @@ sudo apt-get install python-numpy python-scipy python-matplotlib ipython ipython
 # list : []  dictionaries {}, have values & keys
 ```
 
+##### 1.2. Control Flow
+
+> https://scipy-lectures.org/intro/language/control_flow.html
+
+```python
+d = {'a':1,'b':1.2,'c':1j}
+for key,val in sorted(d.items()):
+    print('Key:%s has value: %s'%(key,val))
+
+[i**2 for i in range(4)] # a list
+
+#function definition,can use default value like (radius=1.0)
+def disk_area(radius):
+    return 3.14*radius*radius
+disk_area(1.5)
+```
+
+#### 2. Numpy
+
+##### 2.1. Using boolean masks
+
+```python
+np.random.seed(3)
+a = np.random.randint(0, 21, 15)
+a
+
+(a % 3 == 0)
 
 
+mask = (a % 3 == 0)
+extract_from_a = a[mask] # or,  a[a%3==0]
+extract_from_a           # extract a sub-array with the mask
+```
 
+##### 2.2 baisc visualization
 
-
+> https://scipy-lectures.org/intro/numpy/array_object.html
 
 
 
