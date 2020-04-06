@@ -46,7 +46,19 @@ matlab查看已安装的工具库
 
 #### 上午
 
-目前工作情况：（1）launch启动，能够在yaml文件中配置舵机 （2）能够通过service改变舵机的目标位置，以及调试pid参数，目前调试的结果 p=0.05 d=0.05 i=0，并且可以绘制位置、速度、电流大小的变化曲线 （3）能够实现控制多个电机联动，并通过service控制每个舵机的目标位置 （4）实现轨迹话题，按照写频率生成最小加速度的轨迹 （5）实现控制器operator，启动控制器加载正确的路径文件可以实现轨迹的控制（6）通过rosbag命令，记录舵机的轨迹变化，并转换成txt文件，并在matlab中绘制 （7）通过matlab生成轨迹的yaml文件，应该可以直接给控制器进行控制，但其中轨迹规划的实际参数等存在问题
+目前工作情况：（1）launch启动，能够在yaml文件中配置舵机 （2）能够通过service改变舵机的目标位置，以及调试pid参数，目前调试的结果 p=0.05 d=0.05 i=0，并且可以绘制位置、速度、电流大小的变化曲线 （3）能够实现控制多个电机联动，并通过service控制每个舵机的目标位置 （4）实现轨迹话题，按照写频率生成最小加速度的轨迹 （5）实现控制器operator，启动控制器加载正确的路径文件可以实现轨迹的控制（6）通过rosbag命令，记录舵机的轨迹变化，并转换成txt文件，并在matlab中绘制 （7）通过matlab生成轨迹的yaml文件，应该可以直接给控制器进行控制，但其中轨迹规划的实际参数等存在问题 （8）能够绘制期望轨迹和实际轨迹的曲线
+
+下一步解决轨迹规划的问题，
+
+轨迹规划的话就涉及到速度的原因，或者直接跳过插值的部分
+
+还有思考分布式控制的可行性，
+
+ROS的时间问题
+
+尝试一下自带的PID控制
+
+
 
 
 
@@ -75,6 +87,12 @@ float64[] velocities
 float64[] accelerations
 float64[] effort
 duration time_from_start
+
+
+#desired_trajectory.msg
+uint8[] id
+int32[] goal_position
+
 ```
 
 yaml文件保存路径，operator pub路径 然后controller接收，接收后有个callback函数
@@ -133,9 +151,11 @@ i_gain: 0.001
 d_gain: 0.1"
 
 rosbag record /my_dxl_master/dynamixel_state
+rosbag record /my_dxl_master/dynamixel_state /my_dxl_master/desired_tra
 rosbag play filename.bag -l #循环播放
-rostopic echo -b 2020-03-31-20-05-26.bag -p my_dxl_master/dynamixel_state > data.txt
+rostopic echo -b 2020-03-31-20-05-26.bag -p my_dxl_master/dynamixel_state > state.txt
 
+rostopic echo -b 2020-04-06-09-31-01.bag -p my_dxl_master/desired_tra > d_tra.txt
 ```
 
 ##### 3.我该怎么做
@@ -154,9 +174,13 @@ rostopic echo -b 2020-03-31-20-05-26.bag -p my_dxl_master/dynamixel_state > data
 
 目前记录数据的思路如下：
 
-还要获取一下期望的轨迹；
+还要获取一下期望的轨迹；获取期望轨迹的话就是新建一个话题
 
+发现代码还是有一些问题的
 
+把三个舵机的轨迹在三维图中显示，忽略掉时间维度，只显示位置的误差（这个思路还是有点意思的）
+
+ROS的时间间隔还需要弄明白
 
 
 
