@@ -152,10 +152,16 @@ d_gain: 0.1"
 
 rosbag record /my_dxl_master/dynamixel_state
 rosbag record /my_dxl_master/dynamixel_state /my_dxl_master/desired_tra
+rosbag record /my_distribute_controller/desired_tra /my_distribute_controller/dynamixel_state
+
 rosbag play filename.bag -l #循环播放
 rostopic echo -b 2020-03-31-20-05-26.bag -p my_dxl_master/dynamixel_state > state.txt
 
 rostopic echo -b 2020-04-06-09-31-01.bag -p my_dxl_master/desired_tra > d_tra.txt
+
+rostopic echo -b 2020-04-09-16-55-07.bag -p /my_distribute_controller/dynamixel_state > dis_state01.txt
+
+
 ```
 
 ##### 3.我该怎么做
