@@ -76,6 +76,20 @@ ROS 1的稳定性欠佳，研究开发与上市产品之间的过渡艰难；
 
 ## ROS通讯机制介绍
 
+roscore：启动ROS系统核心的指令。启动master节点，用于给其他节点提供命名和注册的服务，能够记录节点所发布的话题或者服务申请，建立节点之间通讯的桥梁。master还包含参数服务器，节点能够通过该服务器实时存储以及获取一些系统参数，便于节点的配置。此外还会启动rosout节点，该节点能够订阅、记录、再发布messages，并且能够提供一个可视化的后台控制台。
+
+Node：node是ROS中的进程单元，是系统的最小组成单元，node有良好的容错性，相互之间是独立的，说明即使某个节点崩溃，并不会影响到其他的节点。每个节点都会有一个全局的用于辨识的名称。
+
+Service：服务在ROS中是一种请求-应答式的通讯模型，能够实现节点之间点对点的通讯，并能够得到反馈的消息。
+
+Topics：话题是ros节点之间命名的消息传输通道，能够实时的从发布者（publisher）传递消息（message）到订阅者（subscriber），是一种无方向的数据流式（unidirectional，streaming）通讯模型。
+
+rosbag：一种记录topic的工具，将数据按时间标签存储为.bag文件，并支持数据的回放，便于实验数据分析。
+
+yaml：一种配置文件，按照树的结构存储数据，用于轨迹文件的保存以及舵机的配置。
+
+
+
 ### 话题模型
 
 
@@ -1343,7 +1357,6 @@ roslaunch moveit_setup_assistant setup_assistant.launch
   
   对于机械臂group需要定义运动学求解链，对于夹爪只需选择joints
 
-
 ![运动学求解链](image/运动学求解链.png)
 
 最后得到
@@ -1360,7 +1373,11 @@ roslaunch moveit_setup_assistant setup_assistant.launch
 
   效果如下图所示，注意到这里有4个控制器，前两个是moveit的，后两个是你收到moveit的轨迹之后去完成具体插补和机器人控制的，比如和gazebo结合，后缀带gazebo
 
-  ![RosController](image/RosController.png)
+  ![RosController](image/rosController.png)
+  
+  
+  
+  
   
 * Simulation 点击generate urdf
   
