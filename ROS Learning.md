@@ -215,6 +215,14 @@ urdf文件检查
 
 
 
+## tf
+
+
+
+
+
+
+
 
 
 ## moveit官方学习
@@ -350,6 +358,10 @@ https://zhuanlan.zhihu.com/p/63229276
 我们通过`MoveGroupInterface`类来表示你需要控制或规划的规划组
 
 通过`PlanningSceneInterface`来向虚拟的世界添加或移除具备碰撞属性的物体
+
+在按照官方给定教程学习时，需要安装
+
+`sudo apt-get install ros-melodic-moveit-visual-tools`
 
 
 
@@ -713,11 +725,9 @@ collision_object.operation = collision_object.ADD;
 std::vector<moveit_msgs::CollisionObject> collision_objects;
 collision_objects.push_back(collision_object);
 planning_scene_interface.addCollisionObjects(collision_objects);
-
-
 ```
 
-注：如果不定义发布者的话，障碍物并不会在rviz中显示，估计`planning_scene_interface`可以调用发布者
+注：如果不定义发布者的话，障碍物并不会在rviz中显示，估计`planning_scene_interface`可以调用发布者,自动发布（存疑）
 
 另一种发布的方法：
 
@@ -732,13 +742,432 @@ planning_scene.is_diff = true;
 planning_scene_diff_publisher.publish(planning_scene);
 ```
 
-将物体附着在机器人上：
+当将障碍物加入到情景之后，就可以避障规划，代码可参考上述的笛卡尔空间以及关节空间规划
+
+将障碍物依附到机器人上
+
+```c++
+//将障碍物attach到机器人上
+arm.attachObject(collision_object.id);
+```
+
+此时如果让机器人运动的话，障碍物也会运动
+
+```c++
+double targetPose[6] = {0.391410, -0.676384, -0.376217, 0.0, 1.052834, 0.454125};
+std::vector<double> joint_group_positions(6);
+joint_group_positions[0] = targetPose[0];
+joint_group_positions[1] = targetPose[1];
+joint_group_positions[2] = targetPose[2];
+joint_group_positions[3] = targetPose[3];
+joint_group_positions[4] = targetPose[4];
+joint_group_positions[5] = targetPose[5];
+
+arm.setJointValueTarget(joint_group_positions);
+arm.move();
+sleep(1); 
+```
+
+将障碍物放下
+
+```c++
+arm.detachObject(collision_object.id);
+```
+
+机器人回到初始位置
+
+```c++
+//机器人回到原位
+arm.setNamedTarget("home");
+arm.move();
+sleep(1);
+```
+
+从环境中移除障碍物：
+
+```c++
+std::vector<std::string> object_ids;
+object_ids.push_back(collision_object.id);
+planning_scene_interface.removeCollisionObjects(object_ids);
+```
+
+#### 抓取和放置
+
+抓取和放置代码根据Franka机器人，安装见Franka机器人使用指南。因为抓取和放置涉及到凑一些位姿的参数，为了结果合理所以参考官方代码，实际抓取调整即可。
+
+包含的头文件：
+
+```c++
+// ROS
+#include <ros/ros.h>
+
+// MoveIt
+#include <moveit/planning_scene_interface/planning_scene_interface.h>
+#include <moveit/move_group_interface/move_group_interface.h>
+
+// TF2
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
+```
+
+Mark: 在自己使用过程中还需要更改`CMakeList.txt`以及`package.xml`文件以增加相关的依赖。
+
+定义夹爪的运动：
+
+夹爪打开
+
+```c++
+// 输入的参数是一个轨迹的msg，其内容可以参考“常见的msg”小节
+void openGripper(trajectory_msgs::JointTrajectory& posture)
+{
+  //将夹爪关节的名称添加到msg中
+  posture.joint_names.resize(2);	//resize 调整数组大小
+  posture.joint_names[0] = "panda_finger_joint1";
+  posture.joint_names[1] = "panda_finger_joint2";
+
+  //设定张开时关节的姿态，这里采用平动的夹爪
+  posture.points.resize(1);
+  posture.points[0].positions.resize(2);
+  posture.points[0].positions[0] = 0.04;
+  posture.points[0].positions[1] = 0.04;
+  posture.points[0].time_from_start = ros::Duration(0.5);
+}
+```
+
+夹爪闭合
+
+```c++
+void closedGripper(trajectory_msgs::JointTrajectory& posture)
+{
+  posture.joint_names.resize(2);
+  posture.joint_names[0] = "panda_finger_joint1";
+  posture.joint_names[1] = "panda_finger_joint2";
+
+  posture.points.resize(1);
+  posture.points[0].positions.resize(2);
+  posture.points[0].positions[0] = 0.00;
+  posture.points[0].positions[1] = 0.00;
+  posture.points[0].time_from_start = ros::Duration(0.5);
+}
+```
+
+抓取动作执行
+
+```c++
+//函数的输入为运动规划组
+void pick(moveit::planning_interface::MoveGroupInterface& move_group)
+{
+  // 创建一个抓取msg的向量，目前向量定义仅包含一个元素
+  // 采用这样的方式能够帮助你测试多个抓取动作
+  // This is essentially useful when using a grasp generator to generate and test multiple grasps.
+  std::vector<moveit_msgs::Grasp> grasps;
+  grasps.resize(1);
+
+  // 设定抓取的姿态
+  // 这里是设置的 panda_link8 （末端坐标系）的姿态
+  // 姿态需要自己凑一凑
+  // 设置参考坐标系
+  grasps[0].grasp_pose.header.frame_id = "panda_link0";
+  // 这里通过 tf2 的 Quaternion 定义欧拉角，更直观
+  tf2::Quaternion orientation;
+  orientation.setRPY(-M_PI / 2, -M_PI / 4, -M_PI / 2);
+  grasps[0].grasp_pose.pose.orientation = tf2::toMsg(orientation);
+  // 定义位置
+  grasps[0].grasp_pose.pose.position.x = 0.415;
+  grasps[0].grasp_pose.pose.position.y = 0;
+  grasps[0].grasp_pose.pose.position.z = 0.5;
+
+  // Setting pre-grasp approach
+  // ++++++++++++++++++++++++++
+  /* Defined with respect to frame_id */
+  grasps[0].pre_grasp_approach.direction.header.frame_id = "panda_link0";
+  /* Direction is set as positive x axis */
+  grasps[0].pre_grasp_approach.direction.vector.x = 1.0;
+  grasps[0].pre_grasp_approach.min_distance = 0.095;
+  grasps[0].pre_grasp_approach.desired_distance = 0.115;
+
+  // Setting post-grasp retreat
+  // ++++++++++++++++++++++++++
+  /* Defined with respect to frame_id */
+  grasps[0].post_grasp_retreat.direction.header.frame_id = "panda_link0";
+  /* Direction is set as positive z axis */
+  grasps[0].post_grasp_retreat.direction.vector.z = 1.0;
+  grasps[0].post_grasp_retreat.min_distance = 0.1;
+  grasps[0].post_grasp_retreat.desired_distance = 0.25;
+
+  // Setting posture of eef before grasp
+  // +++++++++++++++++++++++++++++++++++
+  openGripper(grasps[0].pre_grasp_posture);
+  // END_SUB_TUTORIAL
+
+  // BEGIN_SUB_TUTORIAL pick2
+  // Setting posture of eef during grasp
+  // +++++++++++++++++++++++++++++++++++
+  closedGripper(grasps[0].grasp_posture);
+  // END_SUB_TUTORIAL
+
+  // BEGIN_SUB_TUTORIAL pick3
+  // Set support surface as table1.
+  move_group.setSupportSurfaceName("table1");
+  // Call pick to pick up the object using the grasps given
+  move_group.pick("object", grasps);
+  // END_SUB_TUTORIAL
+}
+```
+
+主函数
+
+整个流程如下：
+
+1. 向环境中添加桌子table1和table2以及待抓取的物体
+
+   `addCollisionObjects(planning_scene_interface);`
+
+2. 进行抓取
+
+   `pick(group)`
+
+3. 进行放置
+
+   `place(group);`
+
+```c++
+int main(int argc, char** argv)
+{
+  ros::init(argc, argv, "panda_arm_pick_place");
+  ros::NodeHandle nh;
+  ros::AsyncSpinner spinner(1);
+  spinner.start();
+
+  ros::WallDuration(1.0).sleep();
+  moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
+  moveit::planning_interface::MoveGroupInterface group("panda_arm");
+  group.setPlanningTime(45.0);
+
+  addCollisionObjects(planning_scene_interface);
+
+  // Wait a bit for ROS things to initialize
+  ros::WallDuration(1.0).sleep();
+
+  pick(group);
+
+  ros::WallDuration(1.0).sleep();
+
+  place(group);
+
+  ros::waitForShutdown();
+  return 0;
+}
+```
+
+向环境中添加桌子和目标物体`addCollisionObjrcts`
+
+```c++
+void addCollisionObjects(moveit::planning_interface::PlanningSceneInterface& planning_scene_interface)
+{
+  // 需要向环境中添加三个物体：table × 2，target object x 1
+  std::vector<moveit_msgs::CollisionObject> collision_objects;
+  collision_objects.resize(3);
+
+  // 添加第一个桌子
+  collision_objects[0].id = "table1";
+  collision_objects[0].header.frame_id = "panda_link0";
+
+  collision_objects[0].primitives.resize(1);
+  collision_objects[0].primitives[0].type = collision_objects[0].primitives[0].BOX;
+  collision_objects[0].primitives[0].dimensions.resize(3);
+  collision_objects[0].primitives[0].dimensions[0] = 0.2;
+  collision_objects[0].primitives[0].dimensions[1] = 0.4;
+  collision_objects[0].primitives[0].dimensions[2] = 0.4;
+
+  collision_objects[0].primitive_poses.resize(1);
+  collision_objects[0].primitive_poses[0].position.x = 0.5;
+  collision_objects[0].primitive_poses[0].position.y = 0;
+  collision_objects[0].primitive_poses[0].position.z = 0.2;
+
+
+  collision_objects[0].operation = collision_objects[0].ADD;
+
+  // 添加第二个桌子
+  collision_objects[1].id = "table2";
+  collision_objects[1].header.frame_id = "panda_link0";
+
+  collision_objects[1].primitives.resize(1);
+  collision_objects[1].primitives[0].type = collision_objects[1].primitives[0].BOX;
+  collision_objects[1].primitives[0].dimensions.resize(3);
+  collision_objects[1].primitives[0].dimensions[0] = 0.4;
+  collision_objects[1].primitives[0].dimensions[1] = 0.2;
+  collision_objects[1].primitives[0].dimensions[2] = 0.4;
+
+  collision_objects[1].primitive_poses.resize(1);
+  collision_objects[1].primitive_poses[0].position.x = 0;
+  collision_objects[1].primitive_poses[0].position.y = 0.5;
+  collision_objects[1].primitive_poses[0].position.z = 0.2;
+
+  collision_objects[1].operation = collision_objects[1].ADD;
+
+  // 定义待抓取的物体
+  collision_objects[2].header.frame_id = "panda_link0";
+  collision_objects[2].id = "object";
+
+  collision_objects[2].primitives.resize(1);
+  collision_objects[2].primitives[0].type = collision_objects[1].primitives[0].BOX;
+  collision_objects[2].primitives[0].dimensions.resize(3);
+  collision_objects[2].primitives[0].dimensions[0] = 0.02;
+  collision_objects[2].primitives[0].dimensions[1] = 0.02;
+  collision_objects[2].primitives[0].dimensions[2] = 0.2;
+
+  collision_objects[2].primitive_poses.resize(1);
+  collision_objects[2].primitive_poses[0].position.x = 0.5;
+  collision_objects[2].primitive_poses[0].position.y = 0;
+  collision_objects[2].primitive_poses[0].position.z = 0.5;
+
+  collision_objects[2].operation = collision_objects[2].ADD;
+
+  //向场景中添加物体
+  planning_scene_interface.applyCollisionObjects(collision_objects);
+}
+```
 
 
 
 
 
-从环境中移除碰撞物体：
+
+
+### 常见的msg
+
+`trajectory_msgs::JointTrajectory`
+
+```yaml
+Header header
+string[] joint_names
+JointTrajectoryPoint[] points
+```
+
+`trajectory_msgs/JointTrajectoryPoint.msg`
+
+```yaml
+# Each trajectory point specifies either positions[, velocities[, accelerations]]
+# or positions[, effort] for the trajectory to be executed.
+# All specified values are in the same order as the joint names in JointTrajectory.msg
+
+float64[] positions
+float64[] velocities
+float64[] accelerations
+float64[] effort
+duration time_from_start
+```
+
+`moveit_msgs/Grasp.msg`
+
+```yaml
+# 本msg包含抓取相关的描述，针对一种特定的末端执行器，包含如何靠近它，抓紧它等内容。
+# 该msg不包含关于抓取点的描述，生成此消息的任何内容都应该已经合并有关抓取点的信息以及有关几何的信息
+
+# This message contains a description of a grasp that would be used
+# with a particular end-effector to grasp an object, including how to
+# approach it, grip it, etc.  This message does not contain any
+# information about a "grasp point" (a position ON the object).
+# Whatever generates this message should have already combined
+# information about grasp points with information about the geometry
+# of the end-effector to compute the grasp_pose in this message.
+
+# 夹爪的名字
+string id
+
+# The internal posture of the hand for the pre-grasp
+# only positions are used
+# 预抓取的内部姿势？？
+# 只使用到了位置信息，不包含速度、加速度等
+trajectory_msgs/JointTrajectory pre_grasp_posture
+
+# The internal posture of the hand for the grasp
+# positions and efforts are used
+# 抓取的内部姿势
+# 只使用了位置信息，不包含速度、加速度等
+trajectory_msgs/JointTrajectory grasp_posture
+
+# The position of the end-effector for the grasp.  This is the pose of
+# the "parent_link" of the end-effector, not actually the pose of any
+# link *in* the end-effector.  Typically this would be the pose of the
+# most distal wrist link before the hand (end-effector) links began.
+# 夹爪末端的位置。这表示末端执行器相对于“parent_link”的位姿，并不是实际上的连杆。
+# 通常这表示手末端执行器连杆相对最远端腕部连杆的姿势。
+geometry_msgs/PoseStamped grasp_pose
+
+# The estimated probability of success for this grasp, or some other
+# measure of how "good" it is.
+# 本次抓取估计成功的几率，或者其他衡量抓取是否“good”的量化指标
+float64 grasp_quality
+
+# The approach direction to take before picking an object
+# 抓取前的接近方向
+GripperTranslation pre_grasp_approach
+
+# The retreat direction to take after a grasp has been completed (object is attached)
+# 在成功抓到物体后采取的撤退运动的方向
+GripperTranslation post_grasp_retreat
+
+# The retreat motion to perform when releasing the object; this information
+# is not necessary for the grasp itself, but when releasing the object,
+# the information will be necessary. The grasp used to perform a pickup
+# is returned as part of the result, so this information is available for 
+# later use.
+# 释放后的撤退运动，这个信息对于抓取而言不是必须的，但是当释放物体时这个信息是必须的
+# 返回用于执行拾取的抓取作为结果的一部分，因此此信息可供以后使用。
+GripperTranslation post_place_retreat
+
+# the maximum contact force to use while grasping (<=0 to disable)
+# 抓取时的最大接触力 （<=0 是表示不设定最大接触力）
+float32 max_contact_force
+
+# an optional list of obstacles that we have semantic information about
+# and that can be touched/pushed/moved in the course of grasping
+# 障碍物的可选列表，我们具有与之相关的语义信息，并且在抓取过程中可以被触摸/推动/移动
+string[] allowed_touch_objects
+```
+
+`moveit_msgs/GripperTranslation.msg`
+
+```yaml
+# defines a translation for the gripper, used in pickup or place tasks
+# for example for lifting an object off a table or approaching the table for placing
+# 定义夹持器的平移，用于拾取或放置任务，例如用于将物体从桌子上抬起或靠近桌子以放置
+
+
+# the direction of the translation
+# 平移的方向
+geometry_msgs/Vector3Stamped direction
+
+# the desired translation distance
+# 期望平移的距离
+float32 desired_distance
+
+# the min distance that must be considered feasible before the
+# grasp is even attempted
+# 最小的可行距离
+float32 min_distance
+```
+
+`geometry_msgs/Vector3Stamped.msg`
+
+```yaml
+# This represents a Vector3 with reference coordinate frame and timestamp
+Header header
+Vector3 vector
+```
+
+`geometry_msgs/PoseStamped.msg`
+
+```c++
+# A Pose with reference coordinate frame and timestamp
+Header header
+Pose pose
+```
+
+
+
+
 
 
 
@@ -2109,7 +2538,47 @@ joint_trajectory_pub_.publish(*jnt_tra_msg_);
 
 
 
+## Franka 使用指南
 
+### 安装以及配置
+
+> https://frankaemika.github.io/docs/installation_linux.html
+
+基于ros包的安装：
+
+```shell
+sudo apt install ros-melodic-libfranka ros-melodic-franka-ros
+```
+
+基于源代码的安装
+
+1. 先移除已经存在的`libfranka`和`franka_ros`避免冲突
+
+```shell
+sudo apt remove "*libfranka*"
+```
+
+2. building libfranka
+
+先安装ubuntu需要的依赖
+
+```shell
+sudo apt install build-essential cmake git libpoco-dev libeigen3-dev
+```
+
+从github上下载源代码
+
+```shell
+git clone --recursive https://github.com/frankaemika/libfranka
+cd libfranka
+```
+
+默认情况下会检查最新版本的`libfranka`，需要跟换版本
+
+```shell
+git checkout <version>
+git submodule update
+```
 
 
 
