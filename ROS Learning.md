@@ -102,6 +102,59 @@ yaml：一种配置文件，按照树的结构存储数据，用于轨迹文件�
 
 
 
+### rosbag
+
+例程：将存储好的rosbag进行发布
+
+```c++
+#include "ros/ros.h"
+#include <ros/package.h>
+#include <rosbag/bag.h>
+#include <rosbag/view.h>
+#include <sensor_msgs/PointCloud2.h>
+
+int main(int argc, char** argv)
+{
+  ros::init(argc, argv, "bag_publisher_maintain_time");
+  ros::NodeHandle nh;
+
+  ros::Publisher point_cloud_publisher = nh.advertise<sensor_msgs::PointCloud2>("/camera/depth_registered/points", 1);
+  ros::Rate loop_rate(0.1);
+
+  // Variable holding the rosbag containing point cloud data.
+  rosbag::Bag bagfile;
+  std::string path = ros::package::getPath("robot_control");
+  path += "/bags/perception_tutorial.bag";
+  bagfile.open(path, rosbag::bagmode::Read);
+
+  std::vector<std::string> topics;
+  topics.push_back("/camera/depth_registered/points");
+
+  // Iterator for topics in bag.
+  rosbag::View bagtopics_iter(bagfile, rosbag::TopicQuery(topics));
+
+  for (auto const msg : bagtopics_iter)
+  {
+    sensor_msgs::PointCloud2::Ptr point_cloud_ptr = msg.instantiate<sensor_msgs::PointCloud2>();
+    if (point_cloud_ptr == NULL)
+    {
+      std::cout << "error" << std::endl;
+      break;
+    }
+
+    while (ros::ok())
+    {
+      point_cloud_ptr->header.stamp = ros::Time::now();
+      point_cloud_publisher.publish(*point_cloud_ptr);
+      ros::spinOnce();
+      loop_rate.sleep();
+    }
+  }
+  bagfile.close();
+  return 0;
+}
+```
+
 
 
 ## ROS 文件讲解
@@ -791,7 +844,7 @@ object_ids.push_back(collision_object.id);
 planning_scene_interface.removeCollisionObjects(object_ids);
 ```
 
-#### 抓取和放置
+#### 抓取和放置/pick and place
 
 抓取和放置代码根据Franka机器人，安装见Franka机器人使用指南。因为抓取和放置涉及到凑一些位姿的参数，为了结果合理所以参考官方代码，实际抓取调整即可。
 
@@ -811,110 +864,7 @@ planning_scene_interface.removeCollisionObjects(object_ids);
 
 Mark: 在自己使用过程中还需要更改`CMakeList.txt`以及`package.xml`文件以增加相关的依赖。
 
-定义夹爪的运动：
-
-夹爪打开
-
-```c++
-// 输入的参数是一个轨迹的msg，其内容可以参考“常见的msg”小节
-void openGripper(trajectory_msgs::JointTrajectory& posture)
-{
-  //将夹爪关节的名称添加到msg中
-  posture.joint_names.resize(2);	//resize 调整数组大小
-  posture.joint_names[0] = "panda_finger_joint1";
-  posture.joint_names[1] = "panda_finger_joint2";
-
-  //设定张开时关节的姿态，这里采用平动的夹爪
-  posture.points.resize(1);
-  posture.points[0].positions.resize(2);
-  posture.points[0].positions[0] = 0.04;
-  posture.points[0].positions[1] = 0.04;
-  posture.points[0].time_from_start = ros::Duration(0.5);
-}
-```
-
-夹爪闭合
-
-```c++
-void closedGripper(trajectory_msgs::JointTrajectory& posture)
-{
-  posture.joint_names.resize(2);
-  posture.joint_names[0] = "panda_finger_joint1";
-  posture.joint_names[1] = "panda_finger_joint2";
-
-  posture.points.resize(1);
-  posture.points[0].positions.resize(2);
-  posture.points[0].positions[0] = 0.00;
-  posture.points[0].positions[1] = 0.00;
-  posture.points[0].time_from_start = ros::Duration(0.5);
-}
-```
-
-抓取动作执行
-
-```c++
-//函数的输入为运动规划组
-void pick(moveit::planning_interface::MoveGroupInterface& move_group)
-{
-  // 创建一个抓取msg的向量，目前向量定义仅包含一个元素
-  // 采用这样的方式能够帮助你测试多个抓取动作
-  // This is essentially useful when using a grasp generator to generate and test multiple grasps.
-  std::vector<moveit_msgs::Grasp> grasps;
-  grasps.resize(1);
-
-  // 设定抓取的姿态
-  // 这里是设置的 panda_link8 （末端坐标系）的姿态
-  // 姿态需要自己凑一凑
-  // 设置参考坐标系
-  grasps[0].grasp_pose.header.frame_id = "panda_link0";
-  // 这里通过 tf2 的 Quaternion 定义欧拉角，更直观
-  tf2::Quaternion orientation;
-  orientation.setRPY(-M_PI / 2, -M_PI / 4, -M_PI / 2);
-  grasps[0].grasp_pose.pose.orientation = tf2::toMsg(orientation);
-  // 定义位置
-  grasps[0].grasp_pose.pose.position.x = 0.415;
-  grasps[0].grasp_pose.pose.position.y = 0;
-  grasps[0].grasp_pose.pose.position.z = 0.5;
-
-  // Setting pre-grasp approach
-  // ++++++++++++++++++++++++++
-  /* Defined with respect to frame_id */
-  grasps[0].pre_grasp_approach.direction.header.frame_id = "panda_link0";
-  /* Direction is set as positive x axis */
-  grasps[0].pre_grasp_approach.direction.vector.x = 1.0;
-  grasps[0].pre_grasp_approach.min_distance = 0.095;
-  grasps[0].pre_grasp_approach.desired_distance = 0.115;
-
-  // Setting post-grasp retreat
-  // ++++++++++++++++++++++++++
-  /* Defined with respect to frame_id */
-  grasps[0].post_grasp_retreat.direction.header.frame_id = "panda_link0";
-  /* Direction is set as positive z axis */
-  grasps[0].post_grasp_retreat.direction.vector.z = 1.0;
-  grasps[0].post_grasp_retreat.min_distance = 0.1;
-  grasps[0].post_grasp_retreat.desired_distance = 0.25;
-
-  // Setting posture of eef before grasp
-  // +++++++++++++++++++++++++++++++++++
-  openGripper(grasps[0].pre_grasp_posture);
-  // END_SUB_TUTORIAL
-
-  // BEGIN_SUB_TUTORIAL pick2
-  // Setting posture of eef during grasp
-  // +++++++++++++++++++++++++++++++++++
-  closedGripper(grasps[0].grasp_posture);
-  // END_SUB_TUTORIAL
-
-  // BEGIN_SUB_TUTORIAL pick3
-  // Set support surface as table1.
-  move_group.setSupportSurfaceName("table1");
-  // Call pick to pick up the object using the grasps given
-  move_group.pick("object", grasps);
-  // END_SUB_TUTORIAL
-}
-```
-
-主函数
+##### 主函数
 
 整个流程如下：
 
@@ -959,7 +909,16 @@ int main(int argc, char** argv)
 }
 ```
 
+##### 构建场景
+
 向环境中添加桌子和目标物体`addCollisionObjrcts`
+
+图中创建了两个长方体模拟台桌，第一个台桌的尺寸为(0.2,0.4,0.4),位置在(0.5,0,0.2)。第二个台桌的尺寸为(0.4,0.2,0.4)，位置在(0,0.5,0.2)。然后在第一个台桌上放置一个待移动的物件，其尺寸为(0.02,0.02,0.2)，放置在(0.5, 0, 0.4+0.1)的位置，即第一个台桌上。
+（注意： 创建的长方体的自身坐标原点都为其中心点。图中显示的坐标系，红绿蓝分别指向XYZ轴。）
+
+运行的结果：
+
+![image-20200621105014823](image/ROS Learning/image-20200621105014823.png)
 
 ```c++
 void addCollisionObjects(moveit::planning_interface::PlanningSceneInterface& planning_scene_interface)
@@ -1028,13 +987,319 @@ void addCollisionObjects(moveit::planning_interface::PlanningSceneInterface& pla
 }
 ```
 
+##### 夹爪的运动
+
+夹爪打开
+
+```c++
+// 输入的参数是一个轨迹的msg，其内容可以参考“常见的msg”小节
+void openGripper(trajectory_msgs::JointTrajectory& posture)
+{
+  //将夹爪关节的名称添加到msg中
+  posture.joint_names.resize(2);	//resize 调整数组大小
+  posture.joint_names[0] = "panda_finger_joint1";
+  posture.joint_names[1] = "panda_finger_joint2";
+
+  //设定张开时关节的姿态，这里采用平动的夹爪
+  posture.points.resize(1);
+  posture.points[0].positions.resize(2);
+  posture.points[0].positions[0] = 0.04;
+  posture.points[0].positions[1] = 0.04;
+  posture.points[0].time_from_start = ros::Duration(0.5);
+}
+```
+
+夹爪闭合
+
+```c++
+void closedGripper(trajectory_msgs::JointTrajectory& posture)
+{
+  posture.joint_names.resize(2);
+  posture.joint_names[0] = "panda_finger_joint1";
+  posture.joint_names[1] = "panda_finger_joint2";
+
+  posture.points.resize(1);
+  posture.points[0].positions.resize(2);
+  posture.points[0].positions[0] = 0.00;
+  posture.points[0].positions[1] = 0.00;
+  posture.points[0].time_from_start = ros::Duration(0.5);
+}
+```
+
+##### 抓取动作执行
+
+进行抓取操作时，我们需要定义的内容包括：
+
+* `moveit_msgs/GripperTranslation pre_grasp_approach`
+
+  确定抓取之前**末端执行器接近目标物体的方向和距离（pre_grasp_approach）**。即将link_8坐标系在**给定的距离**上调整到与抓取方向一致的方向，然后再沿**设定的接近方向**靠近物体，直到link_8坐标系与给定的抓取方位一致
+
+* `trajectory_msgs/JointTrajectory pre_grasp_posture`
+
+  定义在抓取前末端执行器关节名称以及状态。在本例中即对应openGripper的状态
+
+* `geometry_msgs/PoseStamped grasp_pose`
+
+  确定抓取时link_8的方位。这里要确定一个事情：1，末端执行器手掌面到link_8的距离为0.058；2，末端执行器手抓要抓住长条物体的中间部位。那么link_8的位置可以确定为：
+  $$
+  0.5−长条宽度/2−掌面到link_8的距离−一些padding=0.5−0.01−0.058−0.017=0.415
+  $$
+  link_8的坐标方向则相对于link_0坐标系进行变换，其RPY(分别绕固定轴X,Y,Z旋转)值为$(−π/2,−π/4,−π/2)$
+
+  （**说明：** 为什么要确定link_8的方位呢？因为link_8是arm关节组中的最后一个关节，而运动规划是针对这个关节组的，所以确定link_8的方位就知道怎么进行运动了。而末端执行器都是固连于arm关节组的最后一个关节的，如果不是，那么也可归到arm关节组去了。）
+
+* `trajectory_msgs/JointTrajectory grasp_posture`
+
+  **确定抓取时末端执行器关节的名称以及位置。** 当机器人运动到第三步中指定的抓取方位后，按此步中的定义调整末端执行器，以便夹住物体。**这一步很重要，当夹住物体时会暗地里将物体依附到末端执行器关节上随之运动。**
+
+  （**说明：** 在机器人的urdf中，必须为末端执行器定义可活动的旋转或移动关节，如果是fixed关节则会出错。就算末端执行器是一个固定的吸盘，也将关节定义成移动的，只不过编程时不让它动而已。）
+
+* `moveit_msgs/GripperTranslation pose_grasp_retreat`
+
+  **确定抓取后末端执行器退出动作的方向和距离。** 也就是说在link_8到达指定位置并抓取目标物体后，机器人末端会根据给定的方向移动一段距离（这时末端坐标系的方向并不变）
+
+执行的效果：
+
+![image-20200621125800927](image/ROS Learning/image-20200621125800927.png)
+
+```c++
+//函数的输入为运动规划组
+void pick(moveit::planning_interface::MoveGroupInterface& move_group)
+{
+  // 创建一个抓取msg的向量，目前向量定义仅包含一个元素
+  // 采用这样的方式能够帮助你测试多个抓取动作
+  // This is essentially useful when using a grasp generator to generate and test multiple grasps.
+  std::vector<moveit_msgs::Grasp> grasps;
+  grasps.resize(1);
+
+  // grasp_pose 定义了末端执行器尝试抓取时的位姿
+  // 这里是设置的 panda_link8 （末端坐标系）的姿态
+  grasps[0].grasp_pose.header.frame_id = "panda_link0";
+  // 这里通过 tf2 的 Quaternion 定义欧拉角，更直观
+  tf2::Quaternion orientation;
+  orientation.setRPY(-M_PI / 2, -M_PI / 4, -M_PI / 2);
+  grasps[0].grasp_pose.pose.orientation = tf2::toMsg(orientation);
+  // 定义位置
+  grasps[0].grasp_pose.pose.position.x = 0.415;
+  grasps[0].grasp_pose.pose.position.y = 0;
+  grasps[0].grasp_pose.pose.position.z = 0.5;
+
+
+  // 设定 pre-grasp approach：定义用于接近目标物体的方向和距离
+  grasps[0].pre_grasp_approach.direction.header.frame_id = "panda_link0";
+  grasps[0].pre_grasp_approach.direction.vector.x = 1.0;	//设置接近的方向，沿x轴正向
+  grasps[0].pre_grasp_approach.min_distance = 0.095;
+  grasps[0].pre_grasp_approach.desired_distance = 0.115;
+
+  // Setting post-grasp retreat
+  // 设置抓取到物体后移动的方向和距离
+  grasps[0].post_grasp_retreat.direction.header.frame_id = "panda_link0";
+  // 抓取到物体后从z轴正半轴方向运动
+  grasps[0].post_grasp_retreat.direction.vector.z = 1.0;
+  grasps[0].post_grasp_retreat.min_distance = 0.1;
+  grasps[0].post_grasp_retreat.desired_distance = 0.25;
+
+  // Setting posture of eef before grasp
+  // 定义了在进行抓取之前，末端执行器关节的位置。（即夹爪张开时的关节位置，这里是平动）
+  openGripper(grasps[0].pre_grasp_posture);
+
+ 
+  // Setting posture of eef during grasp
+  // 定义抓取时，末端执行器关节的位置。（即夹爪合并）
+  closedGripper(grasps[0].grasp_posture);
+  
+    
+  // Set support surface as table1.
+  move_group.setSupportSurfaceName("table1");
+  // Call pick to pick up the object using the grasps given
+  // 根据定义的grasp msg 来执行抓取动作（msg中定义了抓取的一些方式）
+  move_group.pick("object", grasps);
+}
+```
 
 
 
+##### 放置物体
+
+放置物体的操作和抓取的过程类似：
+
+* 定义机器人末端如何接近目标放置位置的方向和距离`pre_place_approach`
+* 定义放置时link_8的方位`place_pose`。注意这里的方向是相对于抓取时的方向，本列中是将抓取时方向再绕"base_link"的Z轴旋转90度。而位置则是物体中心的全局坐标。
+* 定义放置后机器人末端如何退出的方向和距离`post_place_retrea`。退出时物体将解除于机器人的依附关系。
+* 定义放置后末端执行器关节的名称和状态`post_place_posture`。
+
+```c++
+void place(moveit::planning_interface::MoveGroupInterface& group)
+{
+  // TODO(@ridhwanluthra) - Calling place function may lead to "All supplied place locations failed. Retrying last
+  // location in
+  // verbose mode." This is a known issue and we are working on fixing it. |br|
+  // Create a vector of placings to be attempted, currently only creating single place location.
+  std::vector<moveit_msgs::PlaceLocation> place_location;
+  place_location.resize(1);
+
+  // Setting place location pose
+  place_location[0].place_pose.header.frame_id = "panda_link0";
+  tf2::Quaternion orientation;
+  orientation.setRPY(0, 0, M_PI / 2);
+  place_location[0].place_pose.pose.orientation = tf2::toMsg(orientation);
+
+  /* While placing it is the exact location of the center of the object. */
+  place_location[0].place_pose.pose.position.x = 0;
+  place_location[0].place_pose.pose.position.y = 0.5;
+  place_location[0].place_pose.pose.position.z = 0.5;
+
+  // Setting pre-place approach
+  place_location[0].pre_place_approach.direction.header.frame_id = "panda_link0";
+  /* Direction is set as negative z axis */
+  place_location[0].pre_place_approach.direction.vector.z = -1.0;
+  place_location[0].pre_place_approach.min_distance = 0.095;
+  place_location[0].pre_place_approach.desired_distance = 0.115;
+
+  // Setting post-grasp retreat
+  place_location[0].post_place_retreat.direction.header.frame_id = "panda_link0";
+  /* Direction is set as negative y axis */
+  place_location[0].post_place_retreat.direction.vector.y = -1.0;
+  place_location[0].post_place_retreat.min_distance = 0.1;
+  place_location[0].post_place_retreat.desired_distance = 0.25;
+
+  // Setting posture of eef after placing object
+  openGripper(place_location[0].post_place_posture);
+
+  // Set support surface as table2.
+  group.setSupportSurfaceName("table2");
+  // Call place to place the object using the place locations given.
+  group.place("object", place_location);
+  // END_SUB_TUTORIAL
+}
+```
+
+#### 3D感知
+
+moveit 允许通过`octomap` 无缝集成3D传感器。只要通过合理的配置，你就能够在`rviz`里面看到感知到的物体。
+
+##### 相机配置
+
+在本节中，我们将逐步介绍如何使用MoveIt在机器人上配置3D传感器。 MoveIt中处理3D感知的主要组件是`Occupancy Map Updater`。 该更新程序使用插件体系结构来处理不同类型的输入。 MoveIt中当前可用的插件是：
+
+* 点云 Occupancy Map Updater：接受点云信息 `sensor_msgs/PointCloud2`
+* 深度图像 Occupancy Map Updater：接受深度图像信息 `sensor_msgs/Image`
+
+**点云相机配置文件：**
+
+`sensors_kinect_pointcloud.yaml`
+
+```yaml
+sensors:
+  - sensor_plugin: occupancy_map_monitor/PointCloudOctomapUpdater
+    point_cloud_topic: /camera/depth_registered/points
+    max_range: 5.0
+    point_subsample: 1
+    padding_offset: 0.1
+    padding_scale: 1.0
+    max_update_rate: 1.0
+    filtered_cloud_topic: filtered_cloud
+```
+
+通用的参数：
+
+* sensor_plugin : 我们使用的插件的名字
+* max_update_rate ：octomap 更新的最大速率
+
+点云数据更新相关的参数：
+
+* point_cloud_topic:  监听的话题
+*  max_range: 点云数据的范围，超过这个值就忽略这个数据（单位：m）
+* point_subsample: Choose one of every *point_subsample* points.
+* padding_offset: 填充物的尺寸（单位：cm）
+* padding_scale： The scale of the padding.
+* filtered_cloud_topic: The topic on which the filtered cloud will be published (mainly for  debugging). The filtering cloud is the resultant cloud after  self-filtering has been performed.
+
+**深度相机配置文件：**
+
+`sensors_kinect_depthmap.yaml`
+
+```yaml
+sensors:
+  - sensor_plugin: occupancy_map_monitor/DepthImageOctomapUpdater
+    image_topic: /camera/depth_registered/image_raw
+    queue_size: 5
+    near_clipping_plane_distance: 0.3
+    far_clipping_plane_distance: 5.0
+    shadow_threshold: 0.2
+    padding_scale: 4.0
+    padding_offset: 0.03
+    max_update_rate: 1.0
+    filtered_cloud_topic: filtered_cloud
+```
+
+* image_topic : 监听的深度图像话题名称
+* queue_size: 图像队列的数量
+* near_clipping_plane_distance: The minimum distance before lack of visibility.
+* far_clipping_plane_distance:  The maximum distance before lack of visibility.
+* shadow_threshold: The minimum brightness of the shadow map below an entity for its dynamic shadow to be visible
+* padding_offset: The size of the padding (in cm).
+* padding_scale: The scale of the padding.
+* filtered_cloud_topic: The topic on which the filtered cloud will be published (mainly for  debugging). The filtering cloud is the resultant cloud after  self-filtering has been performed.
+
+**launch文件配置**
+
+```xml
+<rosparam command="load" file="$(find panda_moveit_config)/config/sensors_kinect_pointcloud.yaml" />
+<param name="octomap_frame" type="string" value="odom_combined" />
+<param name="octomap_resolution" type="double" value="0.05" />
+<param name="max_range" type="double" value="5.0" />
+```
+
+- *octomap_frame*: specifies the coordinate frame in which this representation will be stored. If you are working with a mobile robot,  this frame should be a fixed frame in the world.
+- *octomap_resolution*: specifies the resolution at which this representation is maintained (in meters).
+- *max_range*: specifies the maximum range value to be applied for any sensor input to this node.
+
+##### 场景感知
+
+如果你设定了机器人运动的初始位置和终点位置，如果由于障碍物中间没有一条直线的路径，planner 会自动绕过这个障碍物。
+
+在本案例中预先将3D传感器的信息读取存放在包中，调用节点发布得到信息。(例程参考rosbag)
+
+这样在rviz中就可以得到传感的内容。
+
+执行指令：
+
+`roslaunch robot_control obstacle_avoidance_demo.launch`
+
+执行结果：
+
+可以看到场景中出现方块构建的场景地图，在rviz中拖动机械臂，遇到障碍物会显示碰撞信息，机械臂规划的过程会自动避障。
+
+![image-20200621163013413](image/ROS Learning/image-20200621163013413.png)
+
+发布点云信息在launch文件中需要定义相机坐标系的位置，在实际应用中需要通过**相机标定实现**。
+
+`obstacle_avoidance_demo.launch`
+
+```xml
+<launch>
+  <include file="$(find panda_moveit_config)/launch/demo.launch" />
+
+  <!-- Play the rosbag that contains the pointcloud data -->
+  <node pkg="robot_control" type="bag_publisher_maintain_time" name="point_clouds" />
+
+  <!-- If needed, broadcast static tf for robot root -->
+  <node pkg="tf2_ros" type="static_transform_publisher" name="to_temp_link" args="0 -0.4 0.6 0 0 0 panda_link0 temp_link" />
+  <node pkg="tf2_ros" type="static_transform_publisher" name="to_panda_base" args="0 0 0 0 0 -1.92 temp_link camera_rgb_optical_frame" />
+
+</launch>
+```
+
+##### 提去场景数据作为独立障碍物
+
+为了便于抓取规划，通过相机感知到的物体
 
 
 
 ### 常见的msg
+
+#### 抓取动作msg
 
 `trajectory_msgs::JointTrajectory`
 
@@ -1159,15 +1424,40 @@ Vector3 vector
 
 `geometry_msgs/PoseStamped.msg`
 
-```c++
+```yaml
 # A Pose with reference coordinate frame and timestamp
 Header header
 Pose pose
 ```
 
+`moveit_msgs/PlaceLocation.msg`
+
+```yaml
+# A name for this grasp
+string id
+
+# The internal posture of the hand for the grasp
+# positions and efforts are used
+trajectory_msgs/JointTrajectory post_place_posture
+
+# The position of the end-effector for the grasp relative to a reference frame 
+# (that is always specified elsewhere, not in this message)
+geometry_msgs/PoseStamped place_pose
+
+# The approach motion
+GripperTranslation pre_place_approach
+
+# The retreat motion
+GripperTranslation post_place_retreat
+
+# an optional list of obstacles that we have semantic information about
+# and that can be touched/pushed/moved in the course of grasping
+string[] allowed_touch_objects
+```
 
 
 
+## Gazebo学习
 
 
 
