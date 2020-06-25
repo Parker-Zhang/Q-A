@@ -1459,6 +1459,51 @@ string[] allowed_touch_objects
 
 ## Gazebo学习
 
+掌握如何通过gazebo和ros联合仿真，在gazebo中构建场景
+
+### 基础操作
+
+> 注：官网上的教程图片可能会挂，但是网上已经有挺多博主对教程进行了翻译，可以参考
+>
+> https://www.jianshu.com/u/f658382a4970 简书上的教程
+
+启动，这个指令其实启动了两个程序，一个是`gzserver`一个是`gzclient`
+
+`gazebo`
+
+说明：其中`gzserver`是gazebo的内核，主要用于物理计算循环、传感参数生成，可以独立与图形界面运行。当使用`run headless`时，这个短语就是仅运行`gzserver`，这样可以单独运行在云计算机上，而不需要用户交互。`gzclient`实际运行的是基于QT的用户交互界面，提供仿真可视化，仿真参数设置等。需要单独启动只需要在命令行输入同名的指令即可。
+
+gazebo中worlds的位置：	`ls /usr/local/share/gazebo-9/worlds`
+
+当使用gazebo打开world时可能会出现画面长时间停滞的状态，可能的原因是model库加载不正确(本地没有文件，可能在下载，但是下载很慢)所以可以提前下载好
+
+解决方法：根据gazebo_models.txt进行批量下载，全部下载会花费挺长的时间。
+
+```shell
+ cd ~/.gazebo/
+ mkdir -p models
+ cd ~/.gazebo/models/
+ wget http://file.ncnynl.com/ros/gazebo_models.txt
+ wget -i gazebo_models.txt
+ ls model.tar.g* | xargs -n1 tar xzvf
+```
+
+gazebo的建模教程：
+
+建模一个小车，添加传感器插件，实现小车避障的过程
+
+> https://blog.csdn.net/weixin_41045354/article/details/103668162
+
+Extrude SVG files 拉伸矢量图
+
+`sudo apt-get install freecad`
+
+
+
+
+
+
+
 
 
 
