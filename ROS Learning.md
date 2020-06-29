@@ -1461,11 +1461,13 @@ string[] allowed_touch_objects
 
 掌握如何通过gazebo和ros联合仿真，在gazebo中构建场景
 
-### 基础操作
+### 基础说明
 
 > 注：官网上的教程图片可能会挂，但是网上已经有挺多博主对教程进行了翻译，可以参考
 >
 > https://www.jianshu.com/u/f658382a4970 简书上的教程
+>
+> https://blog.csdn.net/weixin_41045354 同作者CSDN教程，更全
 
 启动，这个指令其实启动了两个程序，一个是`gzserver`一个是`gzclient`
 
@@ -1486,15 +1488,216 @@ gazebo中worlds的位置：	`ls /usr/local/share/gazebo-9/worlds`
  wget http://file.ncnynl.com/ros/gazebo_models.txt
  wget -i gazebo_models.txt
  ls model.tar.g* | xargs -n1 tar xzvf
+
 ```
 
-gazebo的建模教程：
+安装结束后可以正常执行指令
+
+`gazebo worlds/pioneer2dx.world`
+
+### gazebo的建模
 
 建模一个小车，添加传感器插件，实现小车避障的过程
 
 > https://blog.csdn.net/weixin_41045354/article/details/103668162
 
-Extrude SVG files 拉伸矢量图
+#### 建立Velodyne HDL-32 LiDAR 传感器模型
+
+> https://www.jianshu.com/p/fb7d808153e8
+
+注：不加joint 不知道为什么 top和base会叠在一起，按道理说应该有collision的
+
+`gazebo velodyne.world -u` 这个指令好像没用
+
+```xml
+<?xml version="1.0" ?>
+<sdf version="1.5">
+  <world name="default">
+
+    <!-- A global light source -->
+    <include>
+      <uri>model://sun</uri>
+    </include>
+
+    <!-- A ground plane -->
+    <include>
+      <uri>model://ground_plane</uri>
+    </include>
+
+  <model name="velodyne_hdl-32">
+  <!-- Give the base link a unique name -->
+  <link name="base">
+
+    <!-- Offset the base by half the lenght of the cylinder -->
+    <pose>0 0 0.029335 0 0 0</pose>
+    <inertial>
+      <mass>1.2</mass>
+      <inertia>
+        <ixx>0.001087473</ixx>
+        <iyy>0.001087473</iyy>
+        <izz>0.001092437</izz>
+        <ixy>0</ixy>
+        <ixz>0</ixz>
+        <iyz>0</iyz>
+      </inertia>
+    </inertial>
+    <collision name="base_collision">
+      <geometry>
+        <cylinder>
+          <!-- Radius and length provided by Velodyne -->
+          <radius>.04267</radius>
+          <length>.05867</length>
+        </cylinder>
+      </geometry>
+    </collision>
+
+    <!-- The visual is mostly a copy of the collision -->
+    <visual name="base_visual">
+      <geometry>
+        <cylinder>
+          <radius>.04267</radius>
+          <length>.05867</length>
+        </cylinder>
+      </geometry>
+    </visual>
+  </link>
+
+  <!-- Give the base link a unique name -->
+  <link name="top">
+
+    <!-- Vertically offset the top cylinder by the length of the bottom
+        cylinder and half the length of this cylinder. -->
+    <pose>0 0 0.095455 0 0 0</pose>
+   <inertial>
+     <mass>0.1</mass>
+     <inertia>
+       <ixx>0.000090623</ixx>
+       <iyy>0.000090623</iyy>
+       <izz>0.000091036</izz>
+       <ixy>0</ixy>
+       <ixz>0</ixz>
+       <iyz>0</iyz>
+     </inertia>
+   </inertial>
+    <collision name="top_collision">
+      <geometry>
+        <cylinder>
+          <!-- Radius and length provided by Velodyne -->
+          <radius>0.04267</radius>
+          <length>0.07357</length>
+        </cylinder>
+      </geometry>
+    </collision>
+
+    <!-- The visual is mostly a copy of the collision -->
+    <visual name="top_visual">
+      <geometry>
+        <cylinder>
+          <radius>0.04267</radius>
+          <length>0.07357</length>
+        </cylinder>
+      </geometry>
+    </visual>
+    <!-- Add a ray sensor, and give it a name -->
+   <sensor type="ray" name="sensor">
+
+  <!-- Position the ray sensor based on the specification. Also rotate
+       it by 90 degrees around the X-axis so that the <horizontal> rays
+       become vertical -->
+  <pose>0 0 -0.004645 1.5707 0 0</pose>
+
+  <!-- Enable visualization to see the rays in the GUI -->
+  <visualize>true</visualize>
+
+  <!-- Set the update rate of the sensor -->
+  <update_rate>30</update_rate>
+  <ray>
+
+  <!-- The scan element contains the horizontal and vertical beams.
+       We are leaving out the vertical beams for this tutorial. -->
+  <scan>
+
+    <!-- The horizontal beams -->
+    <horizontal>
+      <!-- The velodyne has 32 beams(samples) -->
+      <samples>32</samples>
+
+      <!-- Resolution is multiplied by samples to determine number of
+           simulated beams vs interpolated beams. See:
+           http://sdformat.org/spec?ver=1.6&elem=sensor#horizontal_resolution
+           -->
+      <resolution>1</resolution>
+
+      <!-- Minimum angle in radians -->
+      <min_angle>-0.53529248</min_angle>
+
+      <!-- Maximum angle in radians -->
+      <max_angle>0.18622663</max_angle>
+    </horizontal>
+  </scan>
+
+  <!-- Range defines characteristics of an individual beam -->
+  <range>
+
+    <!-- Minimum distance of the beam -->
+    <min>0.05</min>
+
+    <!-- Maximum distance of the beam -->
+    <max>70</max>
+
+    <!-- Linear resolution of the beam -->
+    <resolution>0.02</resolution>
+  </range>
+</ray>
+  </sensor>
+
+  </link>
+
+<!-- Each joint must have a unique name -->
+<joint type="revolute" name="joint">
+
+  <!-- Position the joint at the bottom of the top link -->
+  <pose>0 0 -0.036785 0 0 0</pose>
+
+  <!-- Use the base link as the parent of the joint -->
+  <parent>base</parent>
+
+  <!-- Use the top link as the child of the joint -->
+  <child>top</child>
+
+  <!-- The axis defines the joint's degree of freedom -->
+  <axis>
+
+    <!-- Revolve around the z-axis -->
+    <xyz>0 0 1</xyz>
+
+    <!-- Limit refers to the range of motion of the joint -->
+    <limit>
+
+      <!-- Use a very large number to indicate a continuous revolution -->
+      <lower>-10000000000000000</lower>
+      <upper>10000000000000000</upper>
+    </limit>
+  </axis>
+</joint>
+
+</model>
+  </world>
+</sdf>
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
 
 `sudo apt-get install freecad`
 
@@ -2115,17 +2318,17 @@ roslaunch moveit_setup_assistant setup_assistant.launch
 
   
 
-  ![运动规划组](image/运动规划组.png)
+  ![运动规划组](image/ROS Learning/运动规划组.png)
   
   
   
   对于机械臂group需要定义运动学求解链，对于夹爪只需选择joints
 
-![运动学求解链](image/运动学求解链.png)
+![运动学求解链](image/ROS Learning/运动学求解链.png)
 
 最后得到
 
-![运动规划组2](image/运动规划组2.png)
+![运动规划组2](image/ROS Learning/运动规划组2.png)
 
 * 定义机器人的预定义姿态（例如设置机械臂的初始位置以及夹爪的合闭张开状态）
 
@@ -2137,7 +2340,7 @@ roslaunch moveit_setup_assistant setup_assistant.launch
 
   效果如下图所示，注意到这里有4个控制器，前两个是moveit的，后两个是你收到moveit的轨迹之后去完成具体插补和机器人控制的，比如和gazebo结合，后缀带gazebo
 
-  ![RosController](image/rosController.png)
+  ![RosController](image/ROS Learning/rosController.png)
   
   
   
@@ -2195,7 +2398,7 @@ roslaunch moveit_setup_assistant setup_assistant.launch
 
 控制架构分析：
 
-![moveit机器人控制框架](image/moveit机器人控制框架.png)
+![moveit机器人控制框架](image/ROS Learning/moveit机器人控制框架.png)
 
 右边：真实机器人硬件	左边：程序指令
 
@@ -2203,7 +2406,7 @@ roslaunch moveit_setup_assistant setup_assistant.launch
 
 控制器接口包括（Joint Trajectory Controller以及 Joint State Controller）
 
-![Moveit+Gazebo仿真框架](image/Moveit+Gazebo仿真框架.png)
+![Moveit+Gazebo仿真框架](image/ROS Learning/Moveit+Gazebo仿真框架.png)
 
 `ros_controllers.yaml`文件修改
 
