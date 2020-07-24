@@ -268,9 +268,263 @@ urdf文件检查
 
 
 
+
+
 ## tf
 
+> 参考资料：
+>
+> http://wiki.ros.org/tf/
+>
+> https://www.bilibili.com/video/BV1zt411G7Vn?p=17
+>
+> http://wiki.ros.org/tf/Tutorials
+>
+> http://wiki.ros.org/tf/Tutorials/Introduction%20to%20tf
 
+tf 功能包的作用：
+
+一个机器人系统当中有很多的三维坐标系，例如世界坐标系，基坐标系，夹爪坐标系，头坐标系等等。tf记录了所有坐标系随时间的变换，它能够知道：
+
+1. 5s前，机器人头部坐标系相对于全局坐标系的关系如何（会记录10s范围内）
+2. 机器人抓取的物体相对机器人基坐标系位置
+3. 机器人当前基坐标系相对于世界坐标系的位置
+
+使用 tf 坐标变换需要两个步骤
+
+1. 监听 TF 变换
+
+   获取并且记录系统广播的所有坐标系的关系，查询特定两个坐标系之间的关系
+
+2. 广播 TF 变换
+
+### tf 相关的一些工具
+
+1. view_frames : 可视化坐标变换
+2. tf_monitor : 监视坐标系的变化
+3. tf_echo: 打印变换关系
+4. roswtf : 使用 tfwtf 插件，记录 tf 运行的问题
+5. static_transform_publisher： 一种命令行，发送静态的坐标变``
+
+**tf_monitor**
+
+`rosrun tf tf_monitor` :这里监测的是有哪些frame，以及延迟情况
+
+`rosrun tf tf_monitor /base_footprint /odom`
+
+**tf_echo**
+
+tf_echo <source_frame> <target_frame>
+
+```shell
+$ rosrun tf tf_echo /map /odom
+At time 1263248513.809
+- Translation: [2.398, 6.783, 0.000]
+- Rotation: in Quaternion [0.000, 0.000, -0.707, 0.707]
+in RPY [0.000, -0.000, -1.570]
+```
+
+描述坐标系的关系，平移就用一个矢量，旋转有两种方式：一种为RPY，一种为四元数
+
+四元数与RPY的转换关系如下：
+
+**static_transform_publisher**
+
+使用方法：
+
+`static_transform_publisher x y z yaw pitch roll frame_id child_frame_id period_in_ms`
+
+`static_transform_publisher x y z qx qy qz qw frame_id child_frame_id period_in_ms`
+
+除了在命令行中直接输入，我们也可以使用 launch 文件
+
+示例如下：
+
+```shell
+<launch>
+<node pkg="tf" type="static_transform_publisher" name="link1_broadcaster" args="1 0 0 0 0 0 1 link1_parent link1 100" />
+</launch>
+```
+
+**view_frame**
+
+能够产生当前坐标变换树的 pdf 图形
+
+`rosrun tf view_frames`
+
+并进行可视化
+
+`evince frames.pdf`
+
+同样可以通过 `rqt_tf_tree` 动态观察坐标系的变换情况
+
+
+
+### ros 中各坐标系的理解
+
+map 坐标系： 地图坐标系，一般为固定的，和机器人所在的世界坐标系相同
+
+base_link: 机器人基坐标系
+
+odom: 里程计坐标系
+
+
+
+### tf案例-海龟追逐实现
+
+```shell
+roslaunch turtle_tf turtle_tf_demo.launch
+rosrun turtlesim turtle_teleop_key
+```
+
+即可实现如下所示的追逐效果
+
+![image-20200724112828869](image/ROS Learning/image-20200724112828869.png)
+
+下列通过分析源码来学习 tf 的作用，包括
+
+如何进行数据的传递？tf的编程流程
+
+
+
+首先在ros包中添加 tf 坐标变换的依赖，
+
+`catkin_create_pkg xxx roscpp tf`
+
+#### tf 广播器
+
+广播任意两个坐标系的关系
+
+实现的流程如下：（1）定义TF广播器 （2）创建坐标变换值 （3）发布坐标变换
+
+```c++
+#include <ros/ros.h>
+#include <tf/transform_broadcaster.h>	//包含广播器头文件
+#include <turtlesim/Pose.h>
+
+std::string turtle_name;
+
+void poseCallback(const turtlesim::PoseConstPtr& msg)
+{
+	// 创建tf的广播器
+	static tf::TransformBroadcaster br;
+
+	// 初始化tf数据，记住tf的数据类型为 tf::Transform
+	tf::Transform transform;
+	transform.setOrigin( tf::Vector3(msg->x, msg->y, 0.0) );
+	tf::Quaternion q;
+	q.setRPY(0, 0, msg->theta);
+	transform.setRotation(q);
+
+	// 广播world与海龟坐标系之间的tf数据,这里是海龟相对于world的位姿关系
+    // 发布的数据类型为 SampedTransform
+	br.sendTransform(tf::StampedTransform(transform, ros::Time::now(), "world", turtle_name));
+}
+
+int main(int argc, char** argv)
+{
+    // 初始化ROS节点
+	ros::init(argc, argv, "my_tf_broadcaster");
+
+	// 输入参数作为海龟的名字
+	if (argc != 2)
+	{
+		ROS_ERROR("need turtle name as argument"); 
+		return -1;
+	}
+
+	turtle_name = argv[1];
+
+	// 订阅海龟的位姿话题
+	ros::NodeHandle node;
+	ros::Subscriber sub = node.subscribe(turtle_name+"/pose", 10, &poseCallback);
+
+    // 循环等待回调函数
+	ros::spin();
+
+	return 0;
+};
+
+```
+
+#### tf 监听器
+
+目的是获取任意两个坐标系之间的关系
+
+流程：（1）定义TF监听器（TransformListener） （2）查找坐标变换（waitForTransform、lookupTransform）
+
+```c++
+#include <ros/ros.h>
+#include <tf/transform_listener.h>	//包含tf监听者类
+#include <geometry_msgs/Twist.h>
+#include <turtlesim/Spawn.h>
+
+int main(int argc, char** argv)
+{
+	// 初始化ROS节点
+	ros::init(argc, argv, "my_tf_listener");
+
+    // 创建节点句柄
+	ros::NodeHandle node;
+
+	// 请求产生turtle2
+	ros::service::waitForService("/spawn");
+	ros::ServiceClient add_turtle = node.serviceClient<turtlesim::Spawn>("/spawn");
+	turtlesim::Spawn srv;
+	add_turtle.call(srv);
+
+	// 创建发布turtle2速度控制指令的发布者,twist包含的是角速度和线速度
+	ros::Publisher turtle_vel = node.advertise<geometry_msgs::Twist>("/turtle2/cmd_vel", 10);
+
+	// 创建tf的监听器
+	tf::TransformListener listener;
+
+	ros::Rate rate(10.0);
+	while (node.ok())
+	{
+		// 获取turtle1与turtle2坐标系之间的tf数据
+		tf::StampedTransform transform;
+		try
+		{
+			listener.waitForTransform("/turtle2", "/turtle1", ros::Time(0), ros::Duration(3.0));	//等待变换
+			listener.lookupTransform("/turtle2", "/turtle1", ros::Time(0), transform);	//查询变换，time(0) 表示查询当前时间
+		}
+		catch (tf::TransformException &ex) 
+		{
+			ROS_ERROR("%s",ex.what());
+			ros::Duration(1.0).sleep();
+			continue;
+		}
+
+		// 根据turtle1与turtle2坐标系之间的位置关系，发布turtle2的速度控制指令
+		geometry_msgs::Twist vel_msg;
+		vel_msg.angular.z = 4.0 * atan2(transform.getOrigin().y(),
+				                        transform.getOrigin().x());
+		vel_msg.linear.x = 0.5 * sqrt(pow(transform.getOrigin().x(), 2) +
+				                      pow(transform.getOrigin().y(), 2));
+		turtle_vel.publish(vel_msg);
+
+		rate.sleep();
+	}
+	return 0;
+};
+```
+
+整个执行的流程
+
+启动海龟仿真器：`rosrun turtlesim turtlesim_node`
+
+发布海龟的坐标系（相对于世界坐标而言）
+
+`rosrun packagename turtle_tf_broadcaster _name:=turtle1_tf_broadcaster /turtle`
+
+其中 `_name` 采用了ros中的重映射机制，为了避免同样程序运行两次产生的节点命名空间冲突，取代ros节点的名字
+
+`rosrun packagename turtle_tf_broadcaster _name:=turtle1_tf_broadcaster /turtle`
+
+启动监听器 `rosrun packagename turtlesim_tf_listener`
+
+启动键盘节点 `rosrun turtlesim turtle_teleop_key`
 
 
 
@@ -288,10 +542,6 @@ urdf文件检查
 git clone https://github.com/ros-planning/moveit_tutorials.git -b melodic-devel
 git clone https://github.com/ros-planning/panda_moveit_config.git -b melodic-devel
 ```
-
-
-
-
 
 
 
@@ -358,7 +608,7 @@ git clone https://github.com/ros-planning/panda_moveit_config.git -b melodic-dev
 
 > http://wiki.ros.org/ros_control
 
-![RosController](image/RosController-1592121202205.png)
+![RosController](image/ROS Learning/RosController-1592121202205.png)
 
 ros_control包输入为：来自机器人执行器编码器（encoders）的关节状态数据（joint state data）和输入设定点作为输入。 它使用通用的控制回路反馈机制（通常是PID控制器）来控制发送到执行器的输出（比如力矩、电流、电压）。 ros_control对于没有joint position，effort（关节位置、力）等一一对应关系的物理机制的情况时，会变得更加复杂，但是这些情况是使用转换（transmission）来解决的。
 
@@ -1455,6 +1705,20 @@ GripperTranslation post_place_retreat
 string[] allowed_touch_objects
 ```
 
+#### geometry_msg
+
+> http://wiki.ros.org/geometry_msgs
+
+```yaml
+# This expresses velocity in free space broken into its linear and angular parts.
+Vector3  linear
+Vector3  angular
+```
+
+
+
+
+
 
 
 ## Gazebo学习
@@ -1686,6 +1950,12 @@ gazebo中worlds的位置：	`ls /usr/local/share/gazebo-9/worlds`
 </sdf>
 
 ```
+
+### Gazebo 多机器人仿真
+
+在 gazebo 中放入机器人采用launch文件实现，步骤如下：
+
+设置launch文件参数 -> 运行gazebo环境 -> 加载机器人模型描述参数 -> 加载机器人模型
 
 
 
@@ -3120,7 +3390,7 @@ git submodule update
 
 
 
-
+## UR机器人双臂
 
 
 
